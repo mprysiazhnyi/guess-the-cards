@@ -1,6 +1,16 @@
 import { useState, useEffect } from 'react';
-import { Typography, Button, Card, CircularProgress } from '@mui/material';
+import {
+  Typography,
+  Button,
+  Card,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+} from '@mui/material';
 import { Hand } from 'pokersolver';
+import Cookies from 'js-cookie';
 
 const fetchRandomWord = async (): Promise<string> => {
   try {
@@ -115,12 +125,13 @@ const classifyHandByCustomLogic = (hand: string[]): string => {
 };
 
 export default function GuessTheCards() {
-  const [timeLeft, setTimeLeft] = useState<number>(100);
+  const [timeLeft, setTimeLeft] = useState<number>(3);
   const [hand, setHand] = useState<string[]>([]);
   const [correctCount, setCorrectCount] = useState<number>(0);
   const [randomWord, setRandomWord] = useState<string>('');
   const [rankOptions, setRankOptions] = useState<string[]>([]);
   const [correctRank, setCorrectRank] = useState<string>('');
+  const [openModal, setOpenModal] = useState<boolean>(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -132,7 +143,7 @@ export default function GuessTheCards() {
 
   useEffect(() => {
     if (timeLeft === 0) {
-      alert(`Game Over! Correct answers: ${correctCount}`);
+      setOpenModal(true); // Open modal when the game is over
     }
   }, [timeLeft]);
 
@@ -141,10 +152,12 @@ export default function GuessTheCards() {
   }, []);
 
   const checkAnswer = (rank: string) => {
-    if (rank === correctRank) {
+    const isCorrect = rank === correctRank;
+    if (isCorrect) {
       setTimeLeft((prev) => prev + 5);
       setCorrectCount((prev) => prev + 1);
     }
+
     handleNewHand();
   };
 
@@ -171,6 +184,38 @@ export default function GuessTheCards() {
   const isRedCard = (card: string): boolean => {
     return card.includes('♦') || card.includes('♥');
   };
+
+  const handleCloseModal = (e: MouseEvent, reason: string) => {
+    if (reason && reason === 'backdropClick') return;
+    setOpenModal(false);
+  };
+
+  const handleTryAgain = () => {
+    setCorrectCount(0); // Reset the score
+    setTimeLeft(3); // Reset the time
+    handleNewHand(); // Start a new game
+    setOpenModal(false); // Close the modal
+  };
+
+  const saveGameToCookie = () => {
+    const gameData = {
+      score: correctCount,
+      date: new Date().toLocaleString(), // Format date
+    };
+
+    const existingGames = Cookies.get('games')
+      ? JSON.parse(Cookies.get('games') || '[]')
+      : [];
+
+    existingGames.push(gameData);
+    Cookies.set('games', JSON.stringify(existingGames), { expires: 365 });
+  };
+
+  useEffect(() => {
+    if (openModal && timeLeft === 0) {
+      saveGameToCookie(); // Save game data when the game ends
+    }
+  }, [openModal]);
 
   return (
     <div style={{ textAlign: 'center', padding: '20px' }}>
@@ -208,6 +253,31 @@ export default function GuessTheCards() {
       <Typography variant="subtitle1">
         Bonus Word: {randomWord || <CircularProgress size={15} />}
       </Typography>
+
+      <Dialog open={openModal} onClose={handleCloseModal}>
+        <DialogTitle>Game Over!</DialogTitle>
+        <DialogContent>
+          <div>
+            <Typography variant="body1">Score: {correctCount}</Typography>
+            <Typography variant="body1">Previous Games:</Typography>
+            {Cookies.get('games') &&
+              JSON.parse(Cookies.get('games') || '').map(
+                (game: { score: number; date: string }, index: number) => (
+                  <div key={index}>
+                    <Typography variant="body2">
+                      Score: {game.score} - Date: {game.date}
+                    </Typography>
+                  </div>
+                )
+              )}
+          </div>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleTryAgain} color="primary">
+            Try Again
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
